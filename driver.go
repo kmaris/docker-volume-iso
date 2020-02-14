@@ -1,37 +1,45 @@
 package main
 
+//TODO: Support mounting the same ISO in multiple locations:
+//https://unix.stackexchange.com/questions/520747/mount-iso-o-loop-select-loop-device
+
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/go-plugins-helpers/volume"
 	"golang.org/x/sys/unix"
 )
 
 type isoVolume struct {
-	iso string
-	Mountpoint string
+	iso                 string
+	Mountpoint          string
 	containerMountPoint string
 }
 
 type isoDriver struct {
-	mutex   *sync.Mutex
+	sync.Mutex
+
 	root    string
 	volumes map[string]*isoVolume
 }
 
 func newIsoDriver(volumesRoot string) *isoDriver {
 	return &isoDriver{
-		root: volumesRoot,
+		root:    volumesRoot,
 		volumes: map[string]*isoVolume{},
 	}
 }
 
+// Create the volume mount point on the host
 func (d isoDriver) Create(r *volume.CreateRequest) error {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	log.WithField("method", "Create").Debugf("%#v", r)
+
+	d.Lock()
+	defer d.Unlock()
 
 	v := &isoVolume{}
 	if iso, ok := r.Options["iso"]; !ok {
@@ -42,16 +50,42 @@ func (d isoDriver) Create(r *volume.CreateRequest) error {
 
 	v.Mountpoint = filepath.Join(d.root, r.Name)
 	if err := os.Mkdir(v.Mountpoint, os.FileMode(0755)); err != nil {
-		return fmt.Errorf("Could not create mount point %s", v.Mountpoint)
+		return fmt.Errorf("Cannot create mount point %s with permissions 0755", v.Mountpoint)
 	}
 
 	d.volumes[r.Name] = v
 	return nil
 }
 
+func (d isoDriver) List() (*volume.ListResponse, error) {
+	d.Lock()
+	defer d.Unlock()
+
+	var volumes []*volume.Volume
+	for name, v := range d.volumes {
+		volumes = append(volumes, &volume.Volume{Name: name, Mountpoint: v.Mountpoint})
+	}
+
+	return &volume.ListResponse{Volumes: volumes}, nil
+}
+
+func (d isoDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
+	d.Lock()
+	defer d.Unlock()
+	log.WithField("method", "Get").Debugf("%#v", r)
+
+	v, present := d.volumes[r.Name]
+	if !present {
+		return &volume.GetResponse{}, fmt.Errorf("Mount volume %s not found", r.Name)
+	}
+
+	return &volume.GetResponse{Volume: &volume.Volume{Name: r.Name, Mountpoint: v.Mountpoint}}, nil
+}
+
 func (d isoDriver) Remove(r *volume.RemoveRequest) error {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	d.Lock()
+	defer d.Unlock()
+	log.WithField("method", "Remove").Debugf("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -67,8 +101,9 @@ func (d isoDriver) Remove(r *volume.RemoveRequest) error {
 }
 
 func (d isoDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	d.Lock()
+	defer d.Unlock()
+	log.WithField("method", "Path").Debugf("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -79,8 +114,9 @@ func (d isoDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
 }
 
 func (d isoDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	d.Lock()
+	defer d.Unlock()
+	log.WithField("method", "Mount").Debugf("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -97,8 +133,9 @@ func (d isoDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) 
 			return &volume.MountResponse{}, fmt.Errorf(err.Error())
 		}
 	}
+	log.WithField("v.Mountpoint", v.Mountpoint).Debugf("%#v", stat)
 	if stat != nil && !stat.IsDir() {
-		return &volume.MountResponse{}, fmt.Errorf("%s exists and is not a directory")
+		return &volume.MountResponse{}, fmt.Errorf("%s exists and is not a directory", v.Mountpoint)
 	}
 
 	if err := unix.Mount(v.iso, v.Mountpoint, "iso9660", 0, "ro"); err != nil {
@@ -109,8 +146,9 @@ func (d isoDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) 
 }
 
 func (d isoDriver) Unmount(r *volume.UnmountRequest) error {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	d.Lock()
+	defer d.Unlock()
+	log.WithField("method", "Unmount").Debugf("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -133,30 +171,6 @@ func (d isoDriver) Unmount(r *volume.UnmountRequest) error {
 	}
 
 	return nil
-}
-
-func (d isoDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	v, present := d.volumes[r.Name]
-	if !present {
-		return &volume.GetResponse{}, fmt.Errorf("Mount volume %s not found", r.Name)
-	}
-
-	return &volume.GetResponse{Volume: &volume.Volume{Name: r.Name, Mountpoint: v.Mountpoint}}, nil
-}
-
-func (d isoDriver) List() (*volume.ListResponse, error) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	var volumes []*volume.Volume
-	for name, v := range d.volumes {
-		volumes = append(volumes, &volume.Volume{Name: name, Mountpoint: v.Mountpoint})
-	}
-
-	return &volume.ListResponse{Volumes: volumes}, nil
 }
 
 func (d isoDriver) Capabilities() *volume.CapabilitiesResponse {
