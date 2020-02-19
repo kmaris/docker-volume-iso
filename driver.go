@@ -1,11 +1,12 @@
 package main
 
-//TODO: Support mounting the same ISO in multiple locations:
+//TODO: Support mounting the same ISO in multiple locations/containers?:
 //https://unix.stackexchange.com/questions/520747/mount-iso-o-loop-select-loop-device
 
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 
@@ -36,7 +37,7 @@ func newIsoDriver(volumesRoot string) *isoDriver {
 
 // Create the volume mount point on the host
 func (d isoDriver) Create(r *volume.CreateRequest) error {
-	log.WithField("method", "Create").Debugf("%#v", r)
+	log.WithField("method", "Create").Infof("%#v", r)
 
 	d.Lock()
 	defer d.Unlock()
@@ -50,7 +51,7 @@ func (d isoDriver) Create(r *volume.CreateRequest) error {
 
 	v.Mountpoint = filepath.Join(d.root, r.Name)
 	if err := os.Mkdir(v.Mountpoint, os.FileMode(0755)); err != nil {
-		return fmt.Errorf("Cannot create mount point %s with permissions 0755", v.Mountpoint)
+		return fmt.Errorf("Cannot create mount point %s with permissions 0755: %v", v.Mountpoint, err)
 	}
 
 	d.volumes[r.Name] = v
@@ -72,7 +73,7 @@ func (d isoDriver) List() (*volume.ListResponse, error) {
 func (d isoDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
 	d.Lock()
 	defer d.Unlock()
-	log.WithField("method", "Get").Debugf("%#v", r)
+	log.WithField("method", "Get").Infof("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -85,7 +86,7 @@ func (d isoDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
 func (d isoDriver) Remove(r *volume.RemoveRequest) error {
 	d.Lock()
 	defer d.Unlock()
-	log.WithField("method", "Remove").Debugf("%#v", r)
+	log.WithField("method", "Remove").Infof("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -103,7 +104,7 @@ func (d isoDriver) Remove(r *volume.RemoveRequest) error {
 func (d isoDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
 	d.Lock()
 	defer d.Unlock()
-	log.WithField("method", "Path").Debugf("%#v", r)
+	log.WithField("method", "Path").Infof("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -116,7 +117,7 @@ func (d isoDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
 func (d isoDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
 	d.Lock()
 	defer d.Unlock()
-	log.WithField("method", "Mount").Debugf("%#v", r)
+	log.WithField("method", "Mount").Infof("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -124,22 +125,18 @@ func (d isoDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) 
 	}
 
 	stat, err := os.Lstat(v.Mountpoint)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if err := os.Mkdir(v.Mountpoint, 0755); err != nil {
-				return &volume.MountResponse{}, fmt.Errorf("Could not create mount point %s", v.Mountpoint)
-			}
-		} else {
-			return &volume.MountResponse{}, fmt.Errorf(err.Error())
-		}
-	}
-	log.WithField("v.Mountpoint", v.Mountpoint).Debugf("%#v", stat)
-	if stat != nil && !stat.IsDir() {
-		return &volume.MountResponse{}, fmt.Errorf("%s exists and is not a directory", v.Mountpoint)
+	if err != nil && os.IsNotExist(err) {
+		return &volume.MountResponse{}, fmt.Errorf("Missing mount point %s: %v", v.Mountpoint, err.Error())
 	}
 
-	if err := unix.Mount(v.iso, v.Mountpoint, "iso9660", 0, "ro"); err != nil {
-		return &volume.MountResponse{}, fmt.Errorf("Could not mount %s to %s", v.iso, v.Mountpoint)
+	if stat != nil && !stat.IsDir() {
+		log.WithField("v.Mountpoint", v.Mountpoint).Infof("%#v", stat)
+		return &volume.MountResponse{}, fmt.Errorf("Mount point %s exists and is not a directory", v.Mountpoint)
+	}
+
+	// TODO: figure how to use unix.Mount(v.iso, v.Mountpoint, "iso9660", 0, "ro")
+	if err := exec.Command("mount", v.iso, v.Mountpoint).Run(); err != nil {
+		return &volume.MountResponse{}, fmt.Errorf("Could not mount %s to %s: %v", v.iso, v.Mountpoint, err.Error())
 	}
 
 	return &volume.MountResponse{Mountpoint: v.Mountpoint}, nil
@@ -148,7 +145,7 @@ func (d isoDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) 
 func (d isoDriver) Unmount(r *volume.UnmountRequest) error {
 	d.Lock()
 	defer d.Unlock()
-	log.WithField("method", "Unmount").Debugf("%#v", r)
+	log.WithField("method", "Unmount").Infof("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
