@@ -1,0 +1,11 @@
+[Unit]
+Description=Docker ISO Volume plugin
+Before=docker.service
+After=network.target iso.socket
+Requires=docker-volume-iso.socket docker.service
+
+[Service]
+ExecStart=/usr/lib/docker/docker-volume-iso
+
+[Install]
+WantedBy=multi-user.target
