@@ -7,7 +7,7 @@ import (
 const socketName = "iso"
 
 func main() {
-	d := newIsoDriver("/var/lib/docker/volumes")
+	d := newIsoDriver("/mnt/volumes")
 	h := volume.NewHandler(d)
 	h.ServeUnix(socketName, 0)
 }
