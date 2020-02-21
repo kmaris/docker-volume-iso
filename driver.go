@@ -12,7 +12,6 @@ import (
 
 	"github.com/docker/go-plugins-helpers/volume"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 )
 
 type isoVolume struct {
@@ -37,7 +36,7 @@ func newIsoDriver(volumesRoot string) *isoDriver {
 
 // Create the volume mount point on the host
 func (d isoDriver) Create(r *volume.CreateRequest) error {
-	log.WithField("method", "Create").Infof("%#v", r)
+	log.WithField("method", "Create").Debugf("%#v", r)
 
 	d.Lock()
 	defer d.Unlock()
@@ -73,7 +72,7 @@ func (d isoDriver) List() (*volume.ListResponse, error) {
 func (d isoDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
 	d.Lock()
 	defer d.Unlock()
-	log.WithField("method", "Get").Infof("%#v", r)
+	log.WithField("method", "Get").Debugf("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -86,7 +85,7 @@ func (d isoDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
 func (d isoDriver) Remove(r *volume.RemoveRequest) error {
 	d.Lock()
 	defer d.Unlock()
-	log.WithField("method", "Remove").Infof("%#v", r)
+	log.WithField("method", "Remove").Debugf("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -104,7 +103,7 @@ func (d isoDriver) Remove(r *volume.RemoveRequest) error {
 func (d isoDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
 	d.Lock()
 	defer d.Unlock()
-	log.WithField("method", "Path").Infof("%#v", r)
+	log.WithField("method", "Path").Debugf("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -117,7 +116,7 @@ func (d isoDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
 func (d isoDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
 	d.Lock()
 	defer d.Unlock()
-	log.WithField("method", "Mount").Infof("%#v", r)
+	log.WithField("method", "Mount").Debugf("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -130,11 +129,10 @@ func (d isoDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) 
 	}
 
 	if stat != nil && !stat.IsDir() {
-		log.WithField("v.Mountpoint", v.Mountpoint).Infof("%#v", stat)
+		log.WithField("v.Mountpoint", v.Mountpoint).Debugf("%#v", stat)
 		return &volume.MountResponse{}, fmt.Errorf("Mount point %s exists and is not a directory", v.Mountpoint)
 	}
 
-	// TODO: figure how to use unix.Mount(v.iso, v.Mountpoint, "iso9660", 0, "ro")
 	if err := exec.Command("mount", v.iso, v.Mountpoint).Run(); err != nil {
 		return &volume.MountResponse{}, fmt.Errorf("Could not mount %s to %s: %v", v.iso, v.Mountpoint, err.Error())
 	}
@@ -145,7 +143,7 @@ func (d isoDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) 
 func (d isoDriver) Unmount(r *volume.UnmountRequest) error {
 	d.Lock()
 	defer d.Unlock()
-	log.WithField("method", "Unmount").Infof("%#v", r)
+	log.WithField("method", "Unmount").Debugf("%#v", r)
 
 	v, present := d.volumes[r.Name]
 	if !present {
@@ -163,7 +161,7 @@ func (d isoDriver) Unmount(r *volume.UnmountRequest) error {
 		}
 	}
 
-	if err := unix.Unmount(v.Mountpoint, 0); err != nil {
+	if err := exec.Command("unmount", v.Mountpoint); err != nil {
 		return fmt.Errorf("Could not unmount %s", v.Mountpoint)
 	}
 
