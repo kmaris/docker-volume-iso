@@ -8,5 +8,5 @@ RUN set -ex \
 
 FROM alpine
 RUN mkdir -p /run/docker/plugins /mnt/volumes
-COPY --from=builder /go/bin/docker-volume-iso .
-CMD ["./docker-volume-iso"]
+COPY --from=builder /go/bin/docker-volume-iso /bin
+CMD ["/bin/docker-volume-iso"]

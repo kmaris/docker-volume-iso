@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	testVolumeName    = "_docker-volume-iso-test"
+	testVolumeName    = "docker-volume-iso-test"
 	testContainerName = "docker-volume-iso-test"
 )
 

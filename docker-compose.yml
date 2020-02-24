@@ -1,7 +1,7 @@
 version: '3.5'
 
 volumes:
-  iso-registry-dev:
+  registry-data:
 
 services:
   registry:
@@ -10,4 +10,4 @@ services:
       - "5000:5000"
     restart: always
     volumes:
-      - iso-registry-dev:/var/lib/registry
+      - registry-data:/var/lib/registry

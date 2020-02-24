@@ -1,7 +1,7 @@
 {
   "description": "ISO plugin for Docker",
   "documentation": "https://github.com/kmaris/docker-volume-iso",
-  "entrypoint": ["/docker-volume-iso"],
+  "entrypoint": ["/bin/docker-volume-iso"],
   "interface": {
     "types": ["docker.volumedriver/1.0"],
     "socket": "iso.sock"
@@ -9,14 +9,15 @@
   "linux": {
     "capabilities": ["CAP_SYS_ADMIN"]
   },
-  "Env": [
+  "env": [
     {
-      "Description": "",
-      "Name": "DEBUG",
-      "Settable": [
+      "description": "Enable debug output.",
+      "name": "DEBUG",
+      "settable": [
         "value"
       ],
-      "Value": "0"
+      "value": "0"
     }
-  ]
+  ],
+  "propagatedMount": "/mnt/volumes"
 }
