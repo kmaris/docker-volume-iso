@@ -13,3 +13,9 @@ The ISO and volume are read-only.
 
 Copy docker-volume-iso to a path on the system. There are systemd related
 resources in the systemd/ subdirectory.
+
+### TODO
+
+- Finish the README
+- Organize builds
+- Explain why this needs to be a legacy plugin
